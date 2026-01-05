@@ -1,127 +1,157 @@
--- ExampleTabbedUI.lua
--- Ejemplo avanzado usando NyxLibrary
+-- AuthSystemExample.lua
+-- Ejemplo de uso del sistema de autenticación
 
-local Roact = require(game.ReplicatedStorage.Libraries.Roact)
-local Nyx = require(game.ReplicatedStorage.Libraries.NyxLibrary)
+-- Cargar la biblioteca
+local AuthLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/tuusuario/turepo/main/AuthLibrary.lua"))()
 
-local TabbedUI = Roact.Component:extend("TabbedUI")
+-- Configurar e inicializar
+local AuthSystem = AuthLibrary.new({
+    WindowTitle = "ROBLOX AUTH SYSTEM v2.1",
+    WindowSize = Vector2.new(450, 350),
+    Theme = "Dark",
+    DebugMode = true
+})
 
-function TabbedUI:init()
-    self:setState({
-        currentTab = 1,
-        toggle1 = false,
-        toggle2 = true,
-    })
-end
+-- Crear la interfaz
+local UI = AuthSystem:CreateWindow()
 
-function TabbedUI:render()
-    local tabs = {"Home", "Player", "Settings"}
+-- Variables de estado
+local IsVerifying = false
 
-    local tabContents = {
-        -- Tab 1: Home
-        {
-            Welcome = Roact.createElement("TextLabel", {
-                Text = "Welcome to Nyx UI!",
-                Font = Enum.Font.Highway,
-                TextSize = 28,
-                TextColor3 = Color3.fromRGB(255, 255, 255),
-                Size = UDim2.new(1, 0, 0, 50),
-                BackgroundTransparency = 1,
-                TextXAlignment = Enum.TextXAlignment.Center,
-            }),
-            Info = Roact.createElement("TextLabel", {
-                Text = "This is a modern UI library for Roblox exploits/scripts.",
-                TextColor3 = Color3.fromRGB(200, 200, 200),
-                TextSize = 16,
-                Position = UDim2.new(0.5, 0, 0, 80),
-                AnchorPoint = Vector2.new(0.5, 0),
-                Size = UDim2.new(0.8, 0, 0, 100),
-                BackgroundTransparency = 1,
-                TextWrapped = true,
-                TextXAlignment = Enum.TextXAlignment.Center,
-            })
-        },
-
-        -- Tab 2: Player
-        {
-            Group1 = Roact.createElement(Nyx.Group, {
-                Title = "Movement",
-                Size = UDim2.new(1, 0, 0, 150),
-                Position = UDim2.new(0, 0, 0, 10),
-            }, {
-                SpeedButton = Roact.createElement(Nyx.Button, {
-                    Text = "Speed Hack",
-                    Position = UDim2.new(0, 20, 0, 40),
-                    OnClick = function() print("Speed activated") end
-                }),
-                JumpButton = Roact.createElement(Nyx.Button, {
-                    Text = "Infinite Jump",
-                    Position = UDim2.new(0.5, 10, 0, 40),
-                    OnClick = function() print("Infinite Jump ON") end
-                }),
-                FlyToggle = Roact.createElement(Nyx.Checkbox, {
-                    Text = "Fly Mode",
-                    Position = UDim2.new(0, 20, 0, 100),
-                    Checked = self.state.toggle1,
-                    OnToggle = function()
-                        self:setState({toggle1 = not self.state.toggle1})
-                    end
-                })
-            }),
-
-            Group2 = Roact.createElement(Nyx.Group, {
-                Title = "Visuals",
-                Size = UDim2.new(1, 0, 0, 120),
-                Position = UDim2.new(0, 0, 0, 170),
-            }, {
-                ESPToggle = Roact.createElement(Nyx.Checkbox, {
-                    Text = "ESP",
-                    Position = UDim2.new(0, 20, 0, 40),
-                    Checked = self.state.toggle2,
-                    OnToggle = function()
-                        self:setState({toggle2 = not self.state.toggle2})
-                    end
-                })
-            })
-        },
-
-        -- Tab 3: Settings
-        {
-            ConfigGroup = Roact.createElement(Nyx.Group, {
-                Title = "Configuration",
-                Size = UDim2.new(1, 0, 0, 200),
-            }, {
-                KeyInput = Roact.createElement(Nyx.TextInput, {
-                    Label = "Auth Key",
-                    Position = UDim2.new(0, 20, 0, 40),
-                }),
-                SaveButton = Roact.createElement(Nyx.Button, {
-                    Text = "Save Config",
-                    Color = Color3.fromRGB(97, 197, 97),
-                    Position = UDim2.new(0.5, -70, 0, 140),
-                    OnClick = function() print("Config saved!") end
-                })
-            })
-        }
-    }
-
-    return Roact.createElement(Nyx.Window, {
-        Title = "N Y X",
-        Size = UDim2.new(0, 600, 0, 500),
-        Draggable = true,
-        OnClose = function()
-            Roact.unmount(self._handle)
+-- Función para actualizar estado
+local function updateStatus(text, isError)
+    if UI.StatusLabel then
+        UI.StatusLabel.Text = "Estado: " .. text
+        if isError then
+            UI.StatusLabel.TextColor3 = AuthSystem._currentTheme.Error
+        else
+            UI.StatusLabel.TextColor3 = AuthSystem._currentTheme.Text
         end
-    }, {
-        Tabs = Roact.createElement(Nyx.Tabs, {
-            TabNames = tabs,
-            CurrentTab = self.state.currentTab,
-            TabContents = tabContents,
-            OnTabChanged = function(index)
-                self:setState({currentTab = index})
-            end
-        })
-    })
+    end
 end
 
-return TabbedUI
+-- Función para mostrar éxito
+local function showSuccess(message)
+    updateStatus(message, false)
+    if UI.StatusLabel then
+        UI.StatusLabel.TextColor3 = AuthSystem._currentTheme.Success
+    end
+end
+
+-- Configurar eventos de botones
+
+-- Botón de login
+UI.LoginButton.MouseButton1Click:Connect(function()
+    if IsVerifying then return end
+    
+    local key = UI.KeyBox.Text
+    if key == "" or key == nil then
+        updateStatus("Por favor ingresa una clave", true)
+        return
+    end
+    
+    IsVerifying = true
+    UI.LoginButton.Text = "VERIFICANDO..."
+    UI.LoginButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    
+    updateStatus("Verificando clave...", false)
+    
+    -- Simular delay de red
+    wait(1.5)
+    
+    local success, message = AuthSystem:Login(key)
+    
+    if success then
+        showSuccess(message)
+        UI.LoginButton.Text = "ACCESO CONCEDIDO"
+        UI.LoginButton.BackgroundColor3 = AuthSystem._currentTheme.Success
+        
+        -- Cerrar ventana después de éxito
+        wait(2)
+        
+        -- Aquí puedes cargar tu script principal
+        updateStatus("Cargando scripts...", false)
+        
+        -- Ejemplo: Ejecutar script después de autenticación
+        local userInfo = AuthSystem:GetUserInfo()
+        print("=== AUTENTICACIÓN EXITOSA ===")
+        print("Usuario:", userInfo.key)
+        print("Nivel:", userInfo.level)
+        print("HWID:", userInfo.hwid)
+        print("Token:", AuthSystem._sessionToken)
+        print("=============================")
+        
+        -- Cerrar la interfaz de autenticación
+        wait(1)
+        AuthSystem:Destroy()
+        
+        -- Aquí puedes iniciar tu script principal
+        -- loadstring(game:HttpGet("tu_script_principal.lua"))()
+        
+    else
+        updateStatus("Error: " .. message, true)
+        UI.LoginButton.Text = "VERIFICAR CLAVE"
+        UI.LoginButton.BackgroundColor3 = AuthSystem._currentTheme.Accent
+    end
+    
+    IsVerifying = false
+end)
+
+-- Botón para copiar HWID
+UI.CopyHWIDButton.MouseButton1Click:Connect(function()
+    local hwid = AuthSystem:GetHWID()
+    if AuthSystem:CopyToClipboard(hwid) then
+        updateStatus("HWID copiado al portapapeles", false)
+        UI.CopyHWIDButton.Text = "¡COPIADO!"
+        wait(1)
+        UI.CopyHWIDButton.Text = "COPIAR HWID AL PORTAPAPELES"
+    else
+        updateStatus("Error al copiar HWID", true)
+    end
+end)
+
+-- Botón de Discord
+UI.DiscordButton.MouseButton1Click:Connect(function()
+    AuthSystem:OpenURL("https://discord.gg/tuinvitacion")
+    updateStatus("Abriendo Discord...", false)
+end)
+
+-- Botón de Sitio Web
+UI.WebsiteButton.MouseButton1Click:Connect(function()
+    AuthSystem:OpenURL("https://tusitio.com")
+    updateStatus("Abriendo sitio web...", false)
+end)
+
+-- Efectos de hover para botones
+local function setupButtonHover(button, normalColor, hoverColor)
+    button.MouseEnter:Connect(function()
+        if not IsVerifying or button.Name ~= "LoginButton" then
+            button.BackgroundColor3 = hoverColor
+        end
+    end)
+    
+    button.MouseLeave:Connect(function()
+        if not IsVerifying or button.Name ~= "LoginButton" then
+            button.BackgroundColor3 = normalColor
+        end
+    end)
+end
+
+-- Aplicar efectos a los botones
+setupButtonHover(UI.LoginButton, AuthSystem._currentTheme.Accent, Color3.fromRGB(0, 140, 255))
+setupButtonHover(UI.CopyHWIDButton, AuthSystem._currentTheme.Accent, Color3.fromRGB(0, 140, 255))
+setupButtonHover(UI.DiscordButton, Color3.fromRGB(88, 101, 242), Color3.fromRGB(108, 121, 255))
+setupButtonHover(UI.WebsiteButton, Color3.fromRGB(52, 152, 219), Color3.fromRGB(72, 172, 239))
+
+-- Función para cerrar con Escape
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Escape then
+        AuthSystem:Destroy()
+    end
+end)
+
+-- Mensaje inicial
+updateStatus("Listo para verificar clave", false)
+
+print("Sistema de autenticación cargado correctamente")
+print("HWID actual:", AuthSystem:GetHWID())
