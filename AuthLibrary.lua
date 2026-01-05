@@ -1,4 +1,4 @@
--- AuthLibrary.lua
+-- AuthLibrary.lua CORREGIDO
 -- Sistema de Autenticación con Claves para Roblox
 
 local AuthLibrary = {}
@@ -9,7 +9,7 @@ AuthLibrary.DefaultConfig = {
     WindowTitle = "Auth System v1.0",
     WindowSize = Vector2.new(500, 400),
     Theme = "Dark",
-    APIUrl = "https://api.ejemplo.com/auth", -- Cambiar por tu API real
+    APIUrl = "https://api.ejemplo.com/auth",
     EncryptKeys = true,
     DebugMode = false
 }
@@ -63,13 +63,19 @@ local function encrypt(text, key)
         return text
     end
     
-    -- Simulación de encriptación básica (implementar método real según necesidades)
+    -- Simulación de encriptación básica
     local result = ""
     for i = 1, #text do
         local charCode = string.byte(text, i)
         local keyChar = string.byte(key, (i % #key) + 1)
-        local encrypted = bit32.bxor(charCode, keyChar)
-        result = result .. string.char(encrypted)
+        -- Usar bit32 si está disponible, sino usar operación XOR simple
+        if bit32 then
+            local encrypted = bit32.bxor(charCode, keyChar)
+            result = result .. string.char(encrypted)
+        else
+            local encrypted = charCode ~ keyChar
+            result = result .. string.char(encrypted)
+        end
     end
     return result
 end
@@ -78,7 +84,7 @@ local function decrypt(text, key)
     if not AuthLibrary.DefaultConfig.EncryptKeys then
         return text
     end
-    return encrypt(text, key) -- XOR es reversible
+    return encrypt(text, key)
 end
 
 -- Métodos principales
@@ -113,7 +119,23 @@ function AuthLibrary:CreateWindow()
     ScreenGui.Name = "AuthSystemGUI"
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.DisplayOrder = 999
-    ScreenGui.Parent = game:GetService("CoreGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Intentar diferentes formas de parentar
+    local success, parent = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    
+    if not success then
+        success, parent = pcall(function()
+            return game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        end)
+    end
+    
+    if success and parent then
+        ScreenGui.Parent = parent
+    else
+        ScreenGui.Parent = game:GetService("StarterGui")
+    end
     
     -- Ventana principal
     local MainFrame = Instance.new("Frame")
@@ -392,7 +414,7 @@ function AuthLibrary:CreateWindow()
         RegisterTab.TextColor3 = Color3.new(1, 1, 1)
     end)
     
-    -- Funcionalidad de botones
+    -- Guardar referencias
     self._screenGui = ScreenGui
     
     return {
@@ -403,27 +425,32 @@ function AuthLibrary:CreateWindow()
         WebsiteButton = WebsiteButton,
         KeyBox = KeyBox,
         StatusLabel = StatusLabel,
-        HWIDBox = HWIDBox
+        HWIDBox = HWIDBox,
+        CloseButton = CloseButton
     }
 end
 
 function AuthLibrary:GetHWID()
-    -- Generar un HWID único basado en información del sistema
+    -- Generar un HWID único
     local info = ""
     
     -- Obtener información del usuario
-    local player = game:GetService("Players").LocalPlayer
-    if player then
+    local success, player = pcall(function()
+        return game:GetService("Players").LocalPlayer
+    end)
+    
+    if success and player then
         info = info .. tostring(player.UserId)
     end
     
-    -- Obtener información del sistema (simplificada para Roblox)
+    -- Agregar timestamp
     info = info .. tostring(tick())
     
     -- Calcular hash simple
     local hash = 0
     for i = 1, #info do
-        hash = (hash * 31 + string.byte(info, i)) % 1000000
+        local byte = string.byte(info, i)
+        hash = (hash * 31 + byte) % 1000000
     end
     
     return string.format("HWID-%06d", hash)
@@ -433,18 +460,32 @@ function AuthLibrary:ValidateKey(key, hwid)
     log(string.format("Validando clave: %s", key), "INFO")
     
     -- Verificación básica de formato
-    if #key < 10 then
+    if #key < 5 then
         return false, "Clave inválida: demasiado corta"
     end
     
-    -- Aquí iría la conexión a tu API real
-    -- Por ahora simulamos una respuesta
-    
-    -- Simulación de clave válida (en producción, verificar con servidor)
+    -- Tabla de claves válidas (SIMULACIÓN - reemplazar con API real)
     local validKeys = {
-        "ABCDE-12345-FGHIJ-67890" = {expiry = os.time() + 86400, level = "VIP"},
-        "TEST-KEY-12345-67890" = {expiry = os.time() + 3600, level = "TEST"},
-        "VIP-ACCESS-99999-11111" = {expiry = os.time() + 2592000, level = "PREMIUM"}
+        ["ABCDE-12345-FGHIJ-67890"] = {
+            expiry = os.time() + 86400,
+            level = "VIP",
+            hwidLocked = false
+        },
+        ["TEST-KEY-12345-67890"] = {
+            expiry = os.time() + 3600,
+            level = "TEST",
+            hwidLocked = false
+        },
+        ["VIP-ACCESS-99999-11111"] = {
+            expiry = os.time() + 2592000,
+            level = "PREMIUM",
+            hwidLocked = false
+        },
+        ["DEMO-2024-AUTH-SYSTEM"] = {
+            expiry = os.time() + 7200,
+            level = "DEMO",
+            hwidLocked = false
+        }
     }
     
     if validKeys[key] then
@@ -455,12 +496,18 @@ function AuthLibrary:ValidateKey(key, hwid)
             return false, "Clave expirada"
         end
         
+        -- Verificar HWID si está bloqueado
+        if keyData.hwidLocked and keyData.hwid ~= hwid then
+            return false, "Clave vinculada a otro HWID"
+        end
+        
         -- Guardar sesión
         self._currentUser = {
             key = key,
             hwid = hwid,
             level = keyData.level,
-            expiry = keyData.expiry
+            expiry = keyData.expiry,
+            loginTime = os.time()
         }
         
         -- Generar token de sesión
@@ -469,7 +516,14 @@ function AuthLibrary:ValidateKey(key, hwid)
         log(string.format("Clave válida. Nivel: %s", keyData.level), "SUCCESS")
         return true, string.format("Acceso concedido. Nivel: %s", keyData.level)
     else
-        return false, "Clave no válida"
+        -- Intentar con API real si está configurada
+        if self.Config.APIUrl and self.Config.APIUrl ~= "https://api.ejemplo.com/auth" then
+            -- Aquí iría la llamada a la API real
+            -- Por ahora retornamos falso
+            return false, "Clave no válida"
+        else
+            return false, "Clave no válida"
+        end
     end
 end
 
@@ -494,28 +548,42 @@ function AuthLibrary:Logout()
 end
 
 function AuthLibrary:CopyToClipboard(text)
-    -- Implementación básica para copiar al portapapeles
-    pcall(function()
-        local ClipBoard = setclipboard or toclipboard or set_clipboard
-        if ClipBoard then
-            ClipBoard(text)
-            return true
+    -- Intentar diferentes métodos para copiar al portapapeles
+    local clipboardFuncs = {
+        setclipboard,
+        toclipboard,
+        set_clipboard,
+        write_clipboard
+    }
+    
+    for _, func in pairs(clipboardFuncs) do
+        if type(func) == "function" then
+            local success = pcall(func, text)
+            if success then
+                return true
+            end
         end
-    end)
+    end
     return false
 end
 
 function AuthLibrary:OpenURL(url)
-    pcall(function()
-        local Open = syn and syn.open or request
-        if Open then
-            Open(url)
+    local openFuncs = {
+        syn and syn.open,
+        request
+    }
+    
+    for _, func in pairs(openFuncs) do
+        if type(func) == "function" then
+            pcall(func, url)
+            return true
         end
-    end)
+    end
+    return false
 end
 
 function AuthLibrary:Destroy()
-    if self._screenGui then
+    if self._screenGui and self._screenGui.Parent then
         self._screenGui:Destroy()
     end
     self._initialized = false
